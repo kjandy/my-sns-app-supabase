@@ -1,5 +1,5 @@
 /**
- * ログイン状態のストア（stores/authStore.js）— 第4回：Supabase版
+ * ログイン状態のストア（stores/authStore.js）— Supabase版（第4回：メール、第5回：Google）
  *
  * ★第3回のモック版と「形」は同じ（user / loading / signOut …）。
  *   画面側は useAuthStore() を使うだけなので、ほとんど書き換えずに済む。
@@ -61,7 +61,11 @@ const useAuthStore = create((set) => ({
       password,
       // ここに入れた値は auth.users の raw_user_meta_data に保存され、
       // トリガー handle_new_user() が profiles.display_name にコピーする
-      options: { data: { full_name: displayName?.trim() || null } },
+      options: {
+        data: { full_name: displayName?.trim() || null },
+        // 「Confirm email」が ON のとき、確認リンクを開いた後の戻り先（第5回で作ったルート）
+        emailRedirectTo: `${location.origin}/auth/callback`,
+      },
     });
     if (error) {
       const msg = getAuthErrorMessage(error);
