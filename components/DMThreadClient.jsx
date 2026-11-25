@@ -15,7 +15,8 @@ import useProfileStore from '@/stores/profileStore';
  */
 export const DMThreadClient = ({ otherUid }) => {
   const { user } = useAuthStore();
-  const { currentConversationId, messages, openConversation, sendMessage } = useDmStore();
+  const { currentConversationId, messages, openConversation, sendMessage, markRead, subscribeMessages } =
+    useDmStore();
   const other = useProfileStore((s) => s.profiles[otherUid]);
   const fetchProfile = useProfileStore((s) => s.fetchProfile);
   const [content, setContent] = useState('');
@@ -28,6 +29,14 @@ export const DMThreadClient = ({ otherUid }) => {
     fetchProfile(otherUid);
     openConversation(otherUid).catch((e) => setError(e.message));
   }, [otherUid, fetchProfile, openConversation]);
+
+  // 会話が開けたら：既読にして、新しいメッセージの購読を始める（画面を離れたら解除）
+  useEffect(() => {
+    if (!currentConversationId || !user) return;
+    markRead(currentConversationId);
+    const unsubscribe = subscribeMessages(currentConversationId, user.uid);
+    return () => unsubscribe();
+  }, [currentConversationId, user, markRead, subscribeMessages]);
 
   // メッセージが増えたら一番下までスクロールする
   useEffect(() => {

@@ -1,5 +1,6 @@
 /**
- * DM（ダイレクトメッセージ）のストア（stores/dmStore.js）— 第11回
+ * DM（ダイレクトメッセージ）のストア（stores/dmStore.js）
+ * 第11回：会話一覧・送受信　第12回：Realtime・既読
  *
  * 会話一覧は conversation_list ビュー、メッセージは messages テーブルを使う。
  * 会話を「作る」のは DB の関数 get_or_create_conversation（rpc で呼ぶ）。
@@ -74,6 +75,31 @@ const useDmStore = create((set, get) => ({
     const { error } = await supabase.from('messages').insert({ conversation_id: conversationId, content });
     if (error) throw new Error(`送信に失敗しました：${error.message}`);
     await get().fetchMessages(conversationId);
+  },
+  // 既読にする（DB の関数 mark_conversation_read を呼ぶ）
+  markRead: async (conversationId) => {
+    const { error } = await supabase.rpc('mark_conversation_read', { conv_id: conversationId });
+    if (error) console.error('markRead', error.message);
+  },
+
+  // --- Realtime（第12回）---
+  // 開いている会話の新しいメッセージを購読する。相手から届いたら既読にする
+  subscribeMessages: (conversationId, myUid) => {
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        (payload) => {
+          const message = toMessage(payload.new);
+          // 自分が送ったものは sendMessage で読み直し済みのことがあるので、重複させない
+          if (get().messages.some((m) => m.id === message.id)) return;
+          set({ messages: [...get().messages, message] });
+          if (message.senderId !== myUid) get().markRead(conversationId);
+        },
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   },
 }));
 
