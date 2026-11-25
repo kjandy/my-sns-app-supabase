@@ -4,13 +4,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FollowButton } from '@/components/FollowButton';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { PostRow } from '@/components/PostRow';
 import { UserAvatar } from '@/components/UserAvatar';
-import { dummyFollows, dummyUsers } from '@/lib/dummyData';
 import useAuthStore from '@/stores/authStore';
 import usePostStore from '@/stores/postStore';
+import useProfileStore from '@/stores/profileStore';
 
 /**
  * プロフィールページの中身（components/ProfileClient.jsx）
@@ -21,18 +22,30 @@ export const ProfileClient = ({ uid }) => {
   const { user } = useAuthStore();
   const { userPosts: posts, fetchUserPosts, deletePost, toggleReaction } = usePostStore();
 
+  const { profiles, followingIds, followCounts, fetchProfile, fetchFollowCounts, fetchMyFollowing, updateProfile, follow, unfollow } =
+    useProfileStore();
+
   useEffect(() => {
     fetchUserPosts(uid, user?.uid);
-  }, [uid, user?.uid, fetchUserPosts]);
+    fetchProfile(uid);
+    fetchFollowCounts(uid);
+    if (user) fetchMyFollowing(user.uid);
+  }, [uid, user, fetchUserPosts, fetchProfile, fetchFollowCounts, fetchMyFollowing]);
 
-  const profile = dummyUsers.find((u) => u.uid === uid);
+  const profile = profiles[uid];
   const isMe = uid === user?.uid;
-  const followingCount = dummyFollows.filter((f) => f.followerId === uid).length;
-  const followerCount = dummyFollows.filter((f) => f.followeeId === uid).length;
-  const isFollowing = dummyFollows.some(
-    (f) => f.followerId === user?.uid && f.followeeId === uid,
-  );
+  const { following: followingCount = 0, followers: followerCount = 0 } = followCounts[uid] ?? {};
+  const isFollowing = followingIds.includes(uid);
 
+  // undefined … まだ読み込み中 ／ null … 見つからなかった
+  if (profile === undefined) {
+    return (
+      <main className="mx-auto min-h-screen max-w-4xl border-x">
+        <PageHeader title="プロフィール" />
+        <p className="px-4 py-16 text-center text-muted-foreground">読み込み中...</p>
+      </main>
+    );
+  }
   if (!profile) {
     return (
       <main className="mx-auto min-h-screen max-w-4xl border-x">
@@ -62,15 +75,17 @@ export const ProfileClient = ({ uid }) => {
               fallbackClassName="text-2xl md:text-4xl"
             />
             {isMe ? (
-              <EditProfileDialog profile={profile} />
+              <EditProfileDialog profile={profile} onSave={(data) => updateProfile(uid, data)} />
             ) : (
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="icon-lg" aria-label="メッセージを送る" onClick={() => router.push('/messages')}>
                   <Mail className="size-4" />
                 </Button>
-                <Button variant={isFollowing ? 'outline' : 'default'} size="lg">
-                  {isFollowing ? 'フォロー中' : 'フォロー'}
-                </Button>
+                <FollowButton
+                  isFollowing={isFollowing}
+                  onFollow={() => follow(user.uid, uid)}
+                  onUnfollow={() => unfollow(user.uid, uid)}
+                />
               </div>
             )}
           </div>

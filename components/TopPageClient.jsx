@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { FloatingPostButton } from '@/components/FloatingPostButton';
 import { PostRow } from '@/components/PostRow';
 import { TimelineTabs } from '@/components/TimelineTabs';
-import { dummyFollows } from '@/lib/dummyData';
 import useAuthStore from '@/stores/authStore';
 import usePostStore from '@/stores/postStore';
+import useProfileStore from '@/stores/profileStore';
 
 /**
  * トップページの中身（components/TopPageClient.jsx）
@@ -19,8 +19,14 @@ export const TopPageClient = () => {
   const { user } = useAuthStore();
   const { timeline, fetchTimeline, createPost, deletePost, toggleReaction } = usePostStore();
 
-  // フォロー中の人＋自分（第3回 Step3 でフォローもストアに移す）
-  const followingIds = dummyFollows.filter((f) => f.followerId === user?.uid).map((f) => f.followeeId);
+  const { followingIds, fetchMyFollowing } = useProfileStore();
+
+  // ログイン中の人がフォローしている人の一覧を読む
+  useEffect(() => {
+    if (user) fetchMyFollowing(user.uid);
+  }, [user, fetchMyFollowing]);
+
+  // フォロー中の人＋自分
   const userIdsKey = [...followingIds, user?.uid].join(',');
 
   // タブやユーザーが変わったら読み込み直す
