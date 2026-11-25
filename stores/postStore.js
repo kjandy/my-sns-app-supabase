@@ -2,8 +2,9 @@
  * 投稿・リアクション・コメントのストア（stores/postStore.js）
  *
  * 第6回：投稿（読み込み・作成・削除）を Supabase に切り替えた。
- *   読むときは timeline_posts ビュー（投稿＋書いた人の名前・アイコン）を使う。
- * いいね・Bad（第7回）とコメント（第8回）は、まだメモリ上のニセのデータベース。
+ *   読むときは timeline_posts ビュー（投稿＋書いた人の名前・アイコン＋件数）を使う。
+ * 第7回：いいね・Bad を post_reactions テーブルに切り替えた。
+ * コメント（第8回）は、まだメモリ上のニセのデータベース。
  *
  * ★関数の名前と引数は第3回から変えていない → 画面のコードはほぼそのまま動く。
  */
@@ -28,21 +29,13 @@ const toPost = (row) => ({
   badByMe: row.bad_by_me,
 });
 
-// ---- いいね・コメントは第7・8回まで、メモリ上のニセのデータベース --------------
-const mockDb = { reactions: [], comments: [] };
+// ---- コメントは第8回まで、メモリ上のニセのデータベース ----------------------
+const mockDb = { comments: [] };
 let nextId = 1000;
-const withMockCounts = (post, myUid) => {
-  const rs = mockDb.reactions.filter((r) => r.postId === post.id);
-  const mine = (kind) => rs.some((r) => r.userId === myUid && r.kind === kind);
-  return {
-    ...post,
-    likeCount: post.likeCount + rs.filter((r) => r.kind === 'like').length,
-    badCount: post.badCount + rs.filter((r) => r.kind === 'bad').length,
-    commentCount: post.commentCount + mockDb.comments.filter((c) => c.postId === post.id).length,
-    likedByMe: post.likedByMe || mine('like'),
-    badByMe: post.badByMe || mine('bad'),
-  };
-};
+const withMockCounts = (post) => ({
+  ...post,
+  commentCount: post.commentCount + mockDb.comments.filter((c) => c.postId === post.id).length,
+});
 
 // タイムラインの問い合わせを組み立てる。before を渡すと「その時刻より古いもの」だけにする
 const buildTimelineQuery = ({ mode, userIds }, before) => {
@@ -80,14 +73,14 @@ const usePostStore = create((set, get) => ({
     if (error) console.error('fetchTimeline', error.message);
     const rows = data ?? [];
     set({
-      timeline: rows.map(toPost).map((p) => withMockCounts(p, myUid)),
+      timeline: rows.map(toPost).map(withMockCounts),
       timelineHasMore: rows.length === PAGE_SIZE, // ちょうど満タンなら続きがあるかもしれない
       timelineLoading: false,
     });
   },
   // 続きを読む：今表示している最後の投稿より「古い」ものを PAGE_SIZE 件
   loadMoreTimeline: async () => {
-    const { timeline, timelineQuery, timelineLoading, timelineHasMore, myUid } = get();
+    const { timeline, timelineQuery, timelineLoading, timelineHasMore } = get();
     if (timelineLoading || !timelineHasMore || !timelineQuery) return;
     set({ timelineLoading: true });
     const last = timeline[timeline.length - 1];
@@ -95,7 +88,7 @@ const usePostStore = create((set, get) => ({
     if (error) console.error('loadMoreTimeline', error.message);
     const rows = data ?? [];
     set({
-      timeline: [...timeline, ...rows.map(toPost).map((p) => withMockCounts(p, myUid))],
+      timeline: [...timeline, ...rows.map(toPost).map(withMockCounts)],
       timelineHasMore: rows.length === PAGE_SIZE,
       timelineLoading: false,
     });
@@ -104,7 +97,7 @@ const usePostStore = create((set, get) => ({
     set({ currentPostLoading: true, currentPostId: postId });
     const { data, error } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
     if (error) console.error('fetchPost', error.message); // 例：id の形式が不正
-    set({ currentPost: data ? withMockCounts(toPost(data), myUid) : null, currentPostLoading: false, myUid });
+    set({ currentPost: data ? withMockCounts(toPost(data)) : null, currentPostLoading: false, myUid });
   },
   fetchUserPosts: async (uid, myUid) => {
     const { data, error } = await supabase
@@ -113,7 +106,7 @@ const usePostStore = create((set, get) => ({
       .eq('user_id', uid)
       .order('created_at', { ascending: false });
     if (error) console.error('fetchUserPosts', error.message);
-    set({ userPosts: (data ?? []).map(toPost).map((p) => withMockCounts(p, myUid)), myUid });
+    set({ userPosts: (data ?? []).map(toPost).map(withMockCounts), myUid });
   },
   fetchComments: async (postId) => {
     set({ comments: mockDb.comments.filter((c) => c.postId === postId) });
@@ -137,13 +130,16 @@ const usePostStore = create((set, get) => ({
       currentPost: get().currentPost?.id === postId ? null : get().currentPost,
     });
   },
-  // いいね・Bad（第7回で Supabase に切り替える）
+  // いいね・Bad の切り替え（kind: 'like' | 'bad'）
+  //   押していなければ1行追加、押していればその行を削除する
   toggleReaction: async (post, kind, myUid) => {
-    const mine = (r) => r.postId === post.id && r.userId === myUid && r.kind === kind;
-    mockDb.reactions = mockDb.reactions.some(mine)
-      ? mockDb.reactions.filter((r) => !mine(r))
-      : [...mockDb.reactions, { postId: post.id, userId: myUid, kind }];
-    get()._refreshPost(post, myUid);
+    const already = kind === 'like' ? post.likedByMe : post.badByMe;
+    const { error } = already
+      ? await supabase.from('post_reactions').delete().match({ post_id: post.id, user_id: myUid, kind })
+      : await supabase.from('post_reactions').insert({ post_id: post.id, kind });
+    // 23505 … 主キーの重複（連打して2回追加しようとした）。すでに押してあるので無視してよい
+    if (error && error.code !== '23505') console.error('toggleReaction', error.message);
+    await get()._refreshPost(post.id);
   },
   // コメント（第8回で Supabase に切り替える）
   addComment: async ({ postId, content, user }) => {
@@ -157,23 +153,24 @@ const usePostStore = create((set, get) => ({
       createdAt: new Date().toISOString(),
     });
     await get().fetchComments(postId);
-    if (get().currentPost) get()._refreshPost(get().currentPost, user.uid);
+    await get()._refreshPost(postId);
   },
   deleteComment: async (comment, myUid) => {
     mockDb.comments = mockDb.comments.filter((c) => c.id !== comment.id);
     await get().fetchComments(comment.postId);
-    if (get().currentPost) get()._refreshPost(get().currentPost, myUid);
+    await get()._refreshPost(comment.postId);
   },
 
-  // 1件の投稿の件数表示を、表示中のすべての一覧で最新にする（ニセのDB用）
-  _refreshPost: (post, myUid) => {
-    const base = { ...post, likeCount: 0, badCount: 0, commentCount: 0, likedByMe: false, badByMe: false };
-    const fresh = withMockCounts(base, myUid);
-    const replace = (list) => list.map((p) => (p.id === post.id ? fresh : p));
+  // 1件の投稿をビューから読み直し、表示中のすべての一覧で差し替える（件数を最新にする）
+  _refreshPost: async (postId) => {
+    const { data } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
+    if (!data) return;
+    const fresh = withMockCounts(toPost(data));
+    const replace = (list) => list.map((p) => (p.id === postId ? fresh : p));
     set({
       timeline: replace(get().timeline),
       userPosts: replace(get().userPosts),
-      currentPost: get().currentPost?.id === post.id ? fresh : get().currentPost,
+      currentPost: get().currentPost?.id === postId ? fresh : get().currentPost,
     });
   },
 }));
