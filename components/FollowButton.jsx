@@ -15,6 +15,8 @@ export const FollowButton = ({ isFollowing, onFollow, onUnfollow }) => {
     setBusy(true);
     try {
       await (isFollowing ? onUnfollow() : onFollow());
+    } catch (error) {
+      window.alert(error.message);
     } finally {
       setBusy(false);
     }

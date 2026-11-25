@@ -1,14 +1,13 @@
 /**
  * プロフィールとフォローのストア（stores/profileStore.js）
  *
- * 第4回：プロフィール（fetchProfile / updateProfile）を Supabase の profiles テーブルに切り替えた。
- * フォロー（follow / unfollow …）は、まだメモリ上のニセのデータベース。第10回で切り替える。
+ * 第4回 ：プロフィール（fetchProfile / updateProfile）を profiles テーブルに切り替えた。
+ * 第10回：フォロー（follow / unfollow …）を follows テーブルに切り替えた。
  *
  * profile の形：{ uid, displayName, photoURL, bio, location, bannerURL }
  */
 import { create } from 'zustand';
 import { createClient } from '@/lib/supabase/client';
-import { dummyFollows } from '@/lib/dummyData';
 
 const supabase = createClient();
 
@@ -25,9 +24,6 @@ export const toProfile = (row) =>
       }
     : null;
 
-// フォローは第10回まで、メモリ上のニセのデータベースのまま
-const mockDb = { follows: [...dummyFollows] };
-
 const useProfileStore = create((set, get) => ({
   // --- State ---
   profiles: {}, // { [uid]: profile } 一度読んだプロフィールを覚えておく（null は「見つからない」）
@@ -43,14 +39,19 @@ const useProfileStore = create((set, get) => ({
     set({ profiles: { ...get().profiles, [uid]: profile } });
     return profile;
   },
+  // 自分がフォローしている人の uid 一覧
   fetchMyFollowing: async (myUid) => {
-    set({ followingIds: mockDb.follows.filter((f) => f.followerId === myUid).map((f) => f.followeeId) });
+    const { data, error } = await supabase.from('follows').select('followee_id').eq('follower_id', myUid);
+    if (error) console.error('fetchMyFollowing', error.message);
+    set({ followingIds: (data ?? []).map((row) => row.followee_id) });
   },
+  // フォロー数・フォロワー数
+  //   { count: 'exact', head: true } … 行の中身は受け取らず、件数だけ数えてもらう
   fetchFollowCounts: async (uid) => {
-    const counts = {
-      following: mockDb.follows.filter((f) => f.followerId === uid).length,
-      followers: mockDb.follows.filter((f) => f.followeeId === uid).length,
-    };
+    const countBy = (column) =>
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq(column, uid);
+    const [following, followers] = await Promise.all([countBy('follower_id'), countBy('followee_id')]);
+    const counts = { following: following.count ?? 0, followers: followers.count ?? 0 };
     set({ followCounts: { ...get().followCounts, [uid]: counts } });
   },
 
@@ -71,13 +72,19 @@ const useProfileStore = create((set, get) => ({
     if (error) throw new Error(`プロフィールの更新に失敗しました：${error.message}`);
     set({ profiles: { ...get().profiles, [uid]: toProfile(row) } });
   },
+  // フォローする（follower_id は DB の default auth.uid() が入る）
   follow: async (myUid, targetUid) => {
-    if (myUid === targetUid) return;
-    mockDb.follows.push({ followerId: myUid, followeeId: targetUid });
+    if (myUid === targetUid) return; // DB の check 制約でも拒否されるが、送る前に止める
+    const { error } = await supabase.from('follows').insert({ followee_id: targetUid });
+    if (error && error.code !== '23505') throw new Error(`フォローに失敗しました：${error.message}`);
     await Promise.all([get().fetchMyFollowing(myUid), get().fetchFollowCounts(targetUid)]);
   },
   unfollow: async (myUid, targetUid) => {
-    mockDb.follows = mockDb.follows.filter((f) => !(f.followerId === myUid && f.followeeId === targetUid));
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .match({ follower_id: myUid, followee_id: targetUid });
+    if (error) throw new Error(`フォロー解除に失敗しました：${error.message}`);
     await Promise.all([get().fetchMyFollowing(myUid), get().fetchFollowCounts(targetUid)]);
   },
 }));
