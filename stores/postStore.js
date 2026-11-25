@@ -6,6 +6,7 @@
  * 第7回：いいね・Bad を post_reactions テーブルに切り替えた。
  * 第8回：コメントを comments テーブルに切り替えた（読むときは comments_with_author ビュー）。
  *   → これでニセのデータベース（mockDb）は無くなった。
+ * 第9回：Realtime で、他の人の投稿・いいね・コメントがすぐ画面に反映されるようにした。
  *
  * ★関数の名前と引数は第3回から変えていない → 画面のコードはほぼそのまま動く。
  */
@@ -129,7 +130,7 @@ const usePostStore = create((set, get) => ({
     if (error) throw new Error(`投稿に失敗しました：${error.message}`);
     // 名前・アイコン付きの形で読み直して、一覧の先頭に足す
     const { data: row } = await supabase.from('timeline_posts').select('*').eq('id', data.id).single();
-    if (row) set({ timeline: [toPost(row), ...get().timeline] });
+    if (row) get()._prependPost(toPost(row));
   },
   deletePost: async (postId) => {
     const { error } = await supabase.from('posts').delete().eq('id', postId);
@@ -164,6 +165,57 @@ const usePostStore = create((set, get) => ({
     await get().fetchComments(comment.postId);
     await get()._refreshPost(comment.postId);
   },
+
+  // ---- Realtime（第9回）-------------------------------------------------
+  // タイムラインの購読を始める。戻り値は購読を解除する関数（useEffect のクリーンアップで呼ぶ）
+  //
+  //   ★Realtime で届くのは「どの行が変わったか」という1件分の差分だけ。
+  //     名前・アイコン・件数は入っていないので、必要ならビューから読み直す。
+  subscribeTimeline: () => {
+    const channel = supabase
+      .channel('timeline')
+      // 誰かが投稿した → その1件をビューから読んで、条件に合えば先頭に足す
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+        const { timelineQuery } = get();
+        const matches =
+          timelineQuery?.mode !== 'following' || timelineQuery.userIds.includes(payload.new.user_id);
+        if (!matches) return;
+        const { data } = await supabase.from('timeline_posts').select('*').eq('id', payload.new.id).maybeSingle();
+        if (data) get()._prependPost(toPost(data));
+      })
+      // 投稿が削除された → 一覧から外す（payload.old には主キー id だけが入っている）
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, (payload) => {
+        get()._removePost(payload.old.id);
+      })
+      // いいね・Bad が増減した → その投稿の件数を読み直す
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_reactions' }, (payload) => {
+        const postId = payload.new?.post_id ?? payload.old?.post_id;
+        if (postId && get()._isShown(postId)) get()._refreshPost(postId);
+      })
+      // コメントが増えた → その投稿のコメント件数を読み直す
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, (payload) => {
+        if (get()._isShown(payload.new.post_id)) get()._refreshPost(payload.new.post_id);
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  },
+
+  // ---- 一覧を書き換えるための小さな関数 ---------------------------------
+  // 同じ投稿が2回入らないように、すでにあれば足さない（自分の投稿は createPost と Realtime の両方から届く）
+  _prependPost: (post) => {
+    if (get().timeline.some((p) => p.id === post.id)) return;
+    set({ timeline: [post, ...get().timeline] });
+  },
+  _removePost: (postId) => {
+    set({
+      timeline: get().timeline.filter((p) => p.id !== postId),
+      userPosts: get().userPosts.filter((p) => p.id !== postId),
+    });
+  },
+  _isShown: (postId) =>
+    get().timeline.some((p) => p.id === postId) ||
+    get().userPosts.some((p) => p.id === postId) ||
+    get().currentPost?.id === postId,
 
   // 1件の投稿をビューから読み直し、表示中のすべての一覧で差し替える（件数を最新にする）
   _refreshPost: async (postId) => {

@@ -23,6 +23,7 @@ export const TopPageClient = () => {
     timelineHasMore,
     fetchTimeline,
     loadMoreTimeline,
+    subscribeTimeline,
     createPost,
     deletePost,
     toggleReaction,
@@ -44,6 +45,13 @@ export const TopPageClient = () => {
     if (!user) return;
     fetchTimeline({ mode: activeTab, myUid: user.uid, userIds: userIdsKey.split(',') });
   }, [activeTab, user, userIdsKey, fetchTimeline]);
+
+  // Realtime：画面を開いている間だけ購読する（離れたら解除）
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = subscribeTimeline();
+    return () => unsubscribe();
+  }, [user, subscribeTimeline]);
 
   // 無限スクロール：一覧の一番下（loadMoreRef）が画面に入ったら続きを読む
   useEffect(() => {
