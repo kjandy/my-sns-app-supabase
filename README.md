@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# my-sns-app（Supabase版）
 
-## Getting Started
+Next.js 16 ＋ Supabase で作る、X（旧Twitter）風の学習用 SNS アプリです（教育コンテンツ）。
+投稿・いいね／Bad・コメント・フォロー・リアルタイム更新・ダイレクトメッセージ・メール＋パスワード／Google ログインを、全12回＋準備回で **ゼロから** 作ります。
 
-First, run the development server:
+## 📘 手順書
+
+**[docs/README.md](docs/README.md)** から始めてください。
+
+- 手順書の Step 1つ ＝ このリポジトリのコミット1つ
+- 各コミットに `lesson回-stepN` のタグ付き（例：`lesson06-step2`）。どのタグでも `npm run build` と `npm run lint` が通ります
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git tag -l 'lesson*' | sort -V          # タグの一覧
+git switch --detach lesson03-step3      # 第3回の完成時点を取り出す
+git switch main                         # 最新に戻る
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 完成版を動かす
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+npm install
+cp .env.local.example .env.local   # Supabase の Project URL と Publishable key を書き込む
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Supabase の SQL Editor で `supabase/migrations/0001〜0008` を番号順に実行しておく必要があります。詳しくは [事前課題](docs/04-0_事前課題_SupabaseとGoogleの準備.md) を参照してください。
 
-## Learn More
+## 使っているもの
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16.4.6 / React 19.3 / Tailwind CSS 4 / shadcn/ui / Zustand 5 / @supabase/supabase-js / @supabase/ssr（JavaScript）
