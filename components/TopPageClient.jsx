@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FloatingPostButton } from '@/components/FloatingPostButton';
 import { PostRow } from '@/components/PostRow';
@@ -17,7 +17,17 @@ export const TopPageClient = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('public');
   const { user, loading } = useAuthStore();
-  const { timeline, fetchTimeline, createPost, deletePost, toggleReaction } = usePostStore();
+  const {
+    timeline,
+    timelineLoading,
+    timelineHasMore,
+    fetchTimeline,
+    loadMoreTimeline,
+    createPost,
+    deletePost,
+    toggleReaction,
+  } = usePostStore();
+  const loadMoreRef = useRef(null);
 
   const { followingIds, fetchMyFollowing } = useProfileStore();
 
@@ -35,6 +45,20 @@ export const TopPageClient = () => {
     fetchTimeline({ mode: activeTab, myUid: user.uid, userIds: userIdsKey.split(',') });
   }, [activeTab, user, userIdsKey, fetchTimeline]);
 
+  // 無限スクロール：一覧の一番下（loadMoreRef）が画面に入ったら続きを読む
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !timelineHasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMoreTimeline();
+      },
+      { rootMargin: '200px' }, // 少し手前で読み始める
+    );
+    observer.observe(target);
+    return () => observer.disconnect(); // 購読したら必ず解除する
+  }, [timelineHasMore, loadMoreTimeline, timeline.length]);
+
   // ログイン状態の判定中は何も出さない（proxy があるので、未ログインならここへは来ない）
   if (loading || !user) {
     return (
@@ -47,7 +71,7 @@ export const TopPageClient = () => {
   return (
     <main className="mx-auto min-h-screen max-w-2xl border-x">
       <TimelineTabs value={activeTab} onChange={setActiveTab} />
-      {timeline.length === 0 && (
+      {timeline.length === 0 && !timelineLoading && (
         <p className="px-4 py-16 text-center text-muted-foreground">まだ投稿がありません</p>
       )}
       {timeline.map((post) => (
@@ -61,6 +85,9 @@ export const TopPageClient = () => {
           onToggleBad={(p) => toggleReaction(p, 'bad', user.uid)}
         />
       ))}
+      {/* この要素が見えたら続きを読む（見えない目印） */}
+      <div ref={loadMoreRef} className="h-10" />
+      {timelineLoading && <p className="pb-8 text-center text-sm text-muted-foreground">読み込み中...</p>}
       <FloatingPostButton onSubmit={(content) => createPost({ content, user })} />
     </main>
   );

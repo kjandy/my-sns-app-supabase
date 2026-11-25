@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { createClient } from '@/lib/supabase/client';
 
 const supabase = createClient();
+const PAGE_SIZE = 10; // 1回に読み込む件数
 
 // ビューの1行（snake_case）→ アプリで使う投稿の形（camelCase）
 const toPost = (row) => ({
@@ -43,38 +44,67 @@ const withMockCounts = (post, myUid) => {
   };
 };
 
+// タイムラインの問い合わせを組み立てる。before を渡すと「その時刻より古いもの」だけにする
+const buildTimelineQuery = ({ mode, userIds }, before) => {
+  let query = supabase
+    .from('timeline_posts')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(PAGE_SIZE);
+  if (mode === 'following') query = query.in('user_id', userIds);
+  if (before) query = query.lt('created_at', before);
+  return query;
+};
+
 // ---- ストア ---------------------------------------------------------------
 const usePostStore = create((set, get) => ({
   // --- State ---
   timeline: [],
   timelineLoading: false,
+  timelineHasMore: false, // まだ続きがあるか（無限スクロール用）
+  timelineQuery: null, // 続きを読むときに同じ条件を使うため、最後の条件を覚えておく
   currentPost: null, // 投稿詳細ページで表示中の投稿（見つからなければ null）
+  currentPostLoading: false,
+  currentPostId: null, // どの投稿を読み込んだ（読み込み中）か
   userPosts: [], // プロフィールページで表示中の人の投稿
   comments: [], // 投稿詳細ページで表示中のコメント
   myUid: null,
 
   // --- 読み込み ---
   // mode: 'public'（全員）/ 'following'（userIds に含まれる人だけ）
+  //   最初の PAGE_SIZE 件だけ読み、続きは loadMoreTimeline() で読む
   fetchTimeline: async ({ mode, myUid, userIds = [] }) => {
-    set({ timelineLoading: true });
-    let query = supabase
-      .from('timeline_posts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (mode === 'following') query = query.in('user_id', userIds);
-    const { data, error } = await query;
+    const timelineQuery = { mode, userIds };
+    set({ timelineLoading: true, timelineQuery, myUid });
+    const { data, error } = await buildTimelineQuery(timelineQuery);
     if (error) console.error('fetchTimeline', error.message);
+    const rows = data ?? [];
     set({
-      timeline: (data ?? []).map(toPost).map((p) => withMockCounts(p, myUid)),
+      timeline: rows.map(toPost).map((p) => withMockCounts(p, myUid)),
+      timelineHasMore: rows.length === PAGE_SIZE, // ちょうど満タンなら続きがあるかもしれない
       timelineLoading: false,
-      myUid,
+    });
+  },
+  // 続きを読む：今表示している最後の投稿より「古い」ものを PAGE_SIZE 件
+  loadMoreTimeline: async () => {
+    const { timeline, timelineQuery, timelineLoading, timelineHasMore, myUid } = get();
+    if (timelineLoading || !timelineHasMore || !timelineQuery) return;
+    set({ timelineLoading: true });
+    const last = timeline[timeline.length - 1];
+    const { data, error } = await buildTimelineQuery(timelineQuery, last?.createdAt);
+    if (error) console.error('loadMoreTimeline', error.message);
+    const rows = data ?? [];
+    set({
+      timeline: [...timeline, ...rows.map(toPost).map((p) => withMockCounts(p, myUid))],
+      timelineHasMore: rows.length === PAGE_SIZE,
+      timelineLoading: false,
     });
   },
   fetchPost: async (postId, myUid) => {
+    set({ currentPostLoading: true, currentPostId: postId });
     const { data, error } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
     if (error) console.error('fetchPost', error.message); // 例：id の形式が不正
-    set({ currentPost: data ? withMockCounts(toPost(data), myUid) : null, myUid });
+    set({ currentPost: data ? withMockCounts(toPost(data), myUid) : null, currentPostLoading: false, myUid });
   },
   fetchUserPosts: async (uid, myUid) => {
     const { data, error } = await supabase

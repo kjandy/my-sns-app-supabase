@@ -18,6 +18,8 @@ export const PostDetailClient = ({ postId }) => {
   const { user } = useAuthStore();
   const {
     currentPost: post,
+    currentPostLoading,
+    currentPostId,
     comments,
     fetchPost,
     fetchComments,
@@ -40,7 +42,9 @@ export const PostDetailClient = ({ postId }) => {
   return (
     <main className="mx-auto min-h-screen max-w-2xl border-x">
       <PageHeader title="投稿" />
-      {!post || post.id !== postId ? (
+      {currentPostLoading || currentPostId !== postId ? (
+        <p className="px-4 py-16 text-center text-muted-foreground">読み込み中...</p>
+      ) : !post ? (
         <p className="px-4 py-16 text-center text-muted-foreground">投稿が見つかりません</p>
       ) : (
         <>
