@@ -88,7 +88,7 @@ export const ProfileClient = ({ uid }) => {
               />
             ) : (
               <div className="mt-2 flex gap-2">
-                <Button variant="outline" size="icon-lg" aria-label="メッセージを送る" onClick={() => router.push('/messages')}>
+                <Button variant="outline" size="icon-lg" aria-label="メッセージを送る" onClick={() => router.push(`/messages/${uid}`)}>
                   <Mail className="size-4" />
                 </Button>
                 <FollowButton
