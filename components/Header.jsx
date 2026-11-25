@@ -8,6 +8,8 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import useAuthStore from '@/stores/authStore';
 import useProfileStore from '@/stores/profileStore';
+import useDmStore, { selectHasUnread } from '@/stores/dmStore';
+import { UnreadDot } from '@/components/UnreadDot';
 
 /**
  * 画面上部のヘッダー（components/Header.jsx）
@@ -22,6 +24,7 @@ export default function Header() {
   const router = useRouter();
   // 表示名・アイコンは profiles テーブルの値を優先する（編集するとすぐ反映される）
   const myProfile = useProfileStore((s) => (user ? s.profiles[user.uid] : null));
+  const hasUnread = useDmStore(selectHasUnread);
 
   const handleSignOut = async () => {
     const result = await signOut();
@@ -54,7 +57,7 @@ export default function Header() {
   const navItems = [
     { href: '/', label: 'ホーム', Icon: Home },
     { href: `/profile/${user.uid}`, label: 'プロフィール', Icon: User },
-    { href: '/messages', label: 'メッセージ', Icon: Mail },
+    { href: '/messages', label: 'メッセージ', Icon: Mail, badge: hasUnread },
   ];
 
   return (
@@ -71,7 +74,7 @@ export default function Header() {
         <nav className="flex items-center gap-1">
           {/* hidden md:flex … スマホでは隠し、md（768px）以上で横並びにする */}
           <div className="hidden items-center gap-1 md:flex">
-            {navItems.map(({ href, label, Icon }) => (
+            {navItems.map(({ href, label, Icon, badge }) => (
               <Button
                 key={href}
                 asChild
@@ -83,7 +86,10 @@ export default function Header() {
                 )}
               >
                 <Link href={href}>
-                  <Icon className="size-6" />
+                  <span className="relative inline-flex">
+                    <Icon className="size-6" />
+                    {badge && <UnreadDot />}
+                  </span>
                   <span>{label}</span>
                 </Link>
               </Button>

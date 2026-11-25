@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import { MobileNav } from '@/components/MobileNav';
 import useAuthStore, { initAuth } from '@/stores/authStore';
 import useProfileStore from '@/stores/profileStore';
+import useDmStore from '@/stores/dmStore';
 
 /**
  * 全ページ共通の枠（components/ClientLayout.jsx）
@@ -26,6 +27,16 @@ export const ClientLayout = ({ children }) => {
   useEffect(() => {
     if (uid) fetchProfile(uid);
   }, [uid, fetchProfile]);
+
+  // DMの会話一覧（未読バッジ用）を読み込み、更新を購読する。アプリ全体でここ1か所だけ
+  const fetchConversations = useDmStore((s) => s.fetchConversations);
+  const subscribeConversations = useDmStore((s) => s.subscribeConversations);
+  useEffect(() => {
+    if (!uid) return;
+    fetchConversations();
+    const unsubscribe = subscribeConversations();
+    return () => unsubscribe();
+  }, [uid, fetchConversations, subscribeConversations]);
 
   return (
     <>

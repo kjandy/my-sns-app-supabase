@@ -83,6 +83,18 @@ const useDmStore = create((set, get) => ({
   },
 
   // --- Realtime（第12回）---
+  // 会話一覧（＝未読バッジ）の購読。どこかの会話が更新されたら一覧を読み直す。
+  //   ★アプリ全体で1か所（ClientLayout）からだけ呼ぶ。2か所から呼ぶと、
+  //     片方の画面を離れたときに購読が解除されてしまう
+  subscribeConversations: () => {
+    const channel = supabase
+      .channel('conversations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        get().fetchConversations();
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  },
   // 開いている会話の新しいメッセージを購読する。相手から届いたら既読にする
   subscribeMessages: (conversationId, myUid) => {
     const channel = supabase
@@ -102,5 +114,8 @@ const useDmStore = create((set, get) => ({
     return () => supabase.removeChannel(channel);
   },
 }));
+
+// 未読の会話が1つでもあるか（ヘッダー・下部ナビのバッジに使う）
+export const selectHasUnread = (state) => state.conversations.some((c) => c.unread);
 
 export default useDmStore;

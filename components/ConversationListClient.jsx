@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/PageHeader';
 import { UserAvatar } from '@/components/UserAvatar';
-import { formatRelativeTime } from '@/lib/utils';
+import { cn, formatRelativeTime } from '@/lib/utils';
 import useDmStore from '@/stores/dmStore';
 
 /**
@@ -38,12 +38,16 @@ export const ConversationListClient = () => {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm">
               <span className="truncate font-bold">{c.otherName}</span>
+              {c.unread && <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="未読" />}
               <span className="text-muted-foreground">·</span>
               <span className="shrink-0 text-muted-foreground" suppressHydrationWarning>
                 {formatRelativeTime(c.lastMessageAt)}
               </span>
             </div>
-            <p className="truncate text-sm text-muted-foreground">{c.lastMessage}</p>
+            {/* 未読なら太字・濃い色にする */}
+            <p className={cn('truncate text-sm', c.unread ? 'font-bold text-foreground' : 'text-muted-foreground')}>
+              {c.lastMessage}
+            </p>
           </div>
         </Link>
       ))}
