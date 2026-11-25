@@ -80,6 +80,26 @@ const useAuthStore = create((set) => ({
     return { needsConfirmation };
   },
 
+  // Googleでログイン
+  signInWithGoogle: async () => {
+    set({ error: null, notice: null });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // ④ Supabase が最後に戻してくる先（＝自分のアプリの callback ルート）
+        redirectTo: `${location.origin}/auth/callback`,
+        // 毎回アカウント選択画面を出す（複数のGoogleアカウントを持つ人のため）
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    // 成功するとページごと Google へ移動するので、この先は基本的に実行されない
+    if (error) {
+      const msg = getAuthErrorMessage(error);
+      set({ error: msg });
+      throw new Error(msg);
+    }
+  },
+
   signOut: async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {

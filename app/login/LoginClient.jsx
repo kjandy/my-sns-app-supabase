@@ -11,8 +11,8 @@ import { GoogleIcon } from '@/components/GoogleIcon';
 import useAuthStore from '@/stores/authStore';
 
 /**
- * ログイン画面（app/login/LoginClient.jsx）— 第4回：メール＋パスワードをつなぐ
- * Google ログインは第5回でつなぐ。
+ * ログイン画面（app/login/LoginClient.jsx）
+ * 第4回：メール＋パスワード、第5回：Google をつないだ。
  */
 export const LoginClient = () => {
   const router = useRouter();
@@ -20,7 +20,7 @@ export const LoginClient = () => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { error, notice, signIn, signUp } = useAuthStore();
+  const { error, notice, signIn, signUp, signInWithGoogle } = useAuthStore();
 
   // ログインできたらトップへ。router.refresh() で、サーバー側（proxy など）にも
   // 新しい Cookie で判定し直してもらう
@@ -38,6 +38,17 @@ export const LoginClient = () => {
     } catch {
       // エラーの文言は authStore の error に入っている
     } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithGoogle();
+      // 成功するとページごと Google へ移動する。戻ってくるのは /auth/callback → / なので
+      // ここで router.push は不要
+    } catch {
       setIsLoading(false);
     }
   };
@@ -63,10 +74,9 @@ export const LoginClient = () => {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* 第5回でつなぐ */}
-          <Button variant="outline" className="w-full" disabled>
+          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
             <GoogleIcon />
-            Googleでログイン（第5回）
+            Googleでログイン
           </Button>
 
           <div className="relative">
