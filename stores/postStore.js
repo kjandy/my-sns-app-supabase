@@ -200,6 +200,29 @@ const usePostStore = create((set, get) => ({
     return () => supabase.removeChannel(channel);
   },
 
+  // 投稿詳細ページで、その投稿へのコメントを購読する
+  //   filter … 「post_id がこの投稿のもの」だけ届くように絞る
+  //   ★DELETE には filter が使えない（Supabase の制限）。届いたら、表示中のものか自分で確かめる
+  subscribeComments: (postId) => {
+    const channel = supabase
+      .channel(`comments:${postId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+        () => {
+          get().fetchComments(postId);
+          get()._refreshPost(postId);
+        },
+      )
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comments' }, (payload) => {
+        if (!get().comments.some((c) => c.id === payload.old.id)) return;
+        get().fetchComments(postId);
+        get()._refreshPost(postId);
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  },
+
   // ---- 一覧を書き換えるための小さな関数 ---------------------------------
   // 同じ投稿が2回入らないように、すでにあれば足さない（自分の投稿は createPost と Realtime の両方から届く）
   _prependPost: (post) => {

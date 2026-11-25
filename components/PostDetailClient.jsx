@@ -27,12 +27,19 @@ export const PostDetailClient = ({ postId }) => {
     toggleReaction,
     addComment,
     deleteComment,
+    subscribeComments,
   } = usePostStore();
 
   useEffect(() => {
     fetchPost(postId, user?.uid);
     fetchComments(postId);
   }, [postId, user?.uid, fetchPost, fetchComments]);
+
+  // Realtime：この投稿へのコメントを購読する（ページを離れたら解除）
+  useEffect(() => {
+    const unsubscribe = subscribeComments(postId);
+    return () => unsubscribe();
+  }, [postId, subscribeComments]);
 
   const handleDeletePost = async (id) => {
     await deletePost(id);
