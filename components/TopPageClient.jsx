@@ -16,7 +16,7 @@ import useProfileStore from '@/stores/profileStore';
 export const TopPageClient = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('public');
-  const { user } = useAuthStore();
+  const { user, loading } = useAuthStore();
   const { timeline, fetchTimeline, createPost, deletePost, toggleReaction } = usePostStore();
 
   const { followingIds, fetchMyFollowing } = useProfileStore();
@@ -35,10 +35,11 @@ export const TopPageClient = () => {
     fetchTimeline({ mode: activeTab, myUid: user.uid, userIds: userIdsKey.split(',') });
   }, [activeTab, user, userIdsKey, fetchTimeline]);
 
-  if (!user) {
+  // ログイン状態の判定中は何も出さない（proxy があるので、未ログインならここへは来ない）
+  if (loading || !user) {
     return (
       <main className="mx-auto min-h-screen max-w-2xl border-x px-4 py-16 text-center text-muted-foreground">
-        ログインしてください
+        読み込み中...
       </main>
     );
   }

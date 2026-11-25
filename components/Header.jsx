@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, LogOut, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -17,7 +17,18 @@ import useAuthStore from '@/stores/authStore';
 export default function Header() {
   const pathname = usePathname();
   // ログイン中のユーザーはストアから取り出す（第3回）
-  const { user, loading } = useAuthStore();
+  const { user, loading, signOut } = useAuthStore();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const result = await signOut();
+    if (!result.success) {
+      window.alert(result.error);
+      return;
+    }
+    router.replace('/login');
+    router.refresh(); // サーバー側にも「ログアウトした」状態で描画し直してもらう
+  };
 
   // 判定中・未ログインのときは、ロゴ代わりの丸と「ログイン」ボタンだけ出す
   if (loading || !user) {
@@ -73,11 +84,8 @@ export default function Header() {
           </div>
 
           <div className="ml-2 flex items-center border-l pl-2">
-            {/* 第1回は見た目だけ。第4回で本物のログアウト処理をつなぐ */}
-            <Button asChild variant="ghost" size="icon-lg" aria-label="ログアウト">
-              <Link href="/login">
-                <LogOut className="size-6" />
-              </Link>
+            <Button variant="ghost" size="icon-lg" aria-label="ログアウト" onClick={handleSignOut}>
+              <LogOut className="size-6" />
             </Button>
           </div>
         </nav>
