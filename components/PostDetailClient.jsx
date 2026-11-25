@@ -63,7 +63,18 @@ export const PostDetailClient = ({ postId }) => {
                 <CommentRow
                   key={c.id}
                   comment={c}
-                  onDelete={c.userId === user?.uid ? () => deleteComment(c, user.uid) : undefined}
+                  onDelete={
+                    c.userId === user?.uid
+                      ? async () => {
+                          if (!window.confirm('このコメントを削除しますか？')) return;
+                          try {
+                            await deleteComment(c);
+                          } catch (error) {
+                            window.alert(error.message);
+                          }
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

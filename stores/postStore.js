@@ -4,7 +4,8 @@
  * 第6回：投稿（読み込み・作成・削除）を Supabase に切り替えた。
  *   読むときは timeline_posts ビュー（投稿＋書いた人の名前・アイコン＋件数）を使う。
  * 第7回：いいね・Bad を post_reactions テーブルに切り替えた。
- * コメント（第8回）は、まだメモリ上のニセのデータベース。
+ * 第8回：コメントを comments テーブルに切り替えた（読むときは comments_with_author ビュー）。
+ *   → これでニセのデータベース（mockDb）は無くなった。
  *
  * ★関数の名前と引数は第3回から変えていない → 画面のコードはほぼそのまま動く。
  */
@@ -29,12 +30,15 @@ const toPost = (row) => ({
   badByMe: row.bad_by_me,
 });
 
-// ---- コメントは第8回まで、メモリ上のニセのデータベース ----------------------
-const mockDb = { comments: [] };
-let nextId = 1000;
-const withMockCounts = (post) => ({
-  ...post,
-  commentCount: post.commentCount + mockDb.comments.filter((c) => c.postId === post.id).length,
+// ビューの1行 → コメントの形
+const toComment = (row) => ({
+  id: row.id,
+  postId: row.post_id,
+  userId: row.user_id,
+  userName: row.user_name,
+  userPhotoURL: row.user_photo_url,
+  content: row.content,
+  createdAt: row.created_at,
 });
 
 // タイムラインの問い合わせを組み立てる。before を渡すと「その時刻より古いもの」だけにする
@@ -73,7 +77,7 @@ const usePostStore = create((set, get) => ({
     if (error) console.error('fetchTimeline', error.message);
     const rows = data ?? [];
     set({
-      timeline: rows.map(toPost).map(withMockCounts),
+      timeline: rows.map(toPost),
       timelineHasMore: rows.length === PAGE_SIZE, // ちょうど満タンなら続きがあるかもしれない
       timelineLoading: false,
     });
@@ -88,7 +92,7 @@ const usePostStore = create((set, get) => ({
     if (error) console.error('loadMoreTimeline', error.message);
     const rows = data ?? [];
     set({
-      timeline: [...timeline, ...rows.map(toPost).map(withMockCounts)],
+      timeline: [...timeline, ...rows.map(toPost)],
       timelineHasMore: rows.length === PAGE_SIZE,
       timelineLoading: false,
     });
@@ -97,7 +101,7 @@ const usePostStore = create((set, get) => ({
     set({ currentPostLoading: true, currentPostId: postId });
     const { data, error } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
     if (error) console.error('fetchPost', error.message); // 例：id の形式が不正
-    set({ currentPost: data ? withMockCounts(toPost(data)) : null, currentPostLoading: false, myUid });
+    set({ currentPost: data ? toPost(data) : null, currentPostLoading: false, myUid });
   },
   fetchUserPosts: async (uid, myUid) => {
     const { data, error } = await supabase
@@ -106,10 +110,16 @@ const usePostStore = create((set, get) => ({
       .eq('user_id', uid)
       .order('created_at', { ascending: false });
     if (error) console.error('fetchUserPosts', error.message);
-    set({ userPosts: (data ?? []).map(toPost).map(withMockCounts), myUid });
+    set({ userPosts: (data ?? []).map(toPost), myUid });
   },
   fetchComments: async (postId) => {
-    set({ comments: mockDb.comments.filter((c) => c.postId === postId) });
+    const { data, error } = await supabase
+      .from('comments_with_author')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true }); // コメントは古い順（会話の流れどおり）
+    if (error) console.error('fetchComments', error.message);
+    set({ comments: (data ?? []).map(toComment) });
   },
 
   // --- 書き込み ---
@@ -141,22 +151,16 @@ const usePostStore = create((set, get) => ({
     if (error && error.code !== '23505') console.error('toggleReaction', error.message);
     await get()._refreshPost(post.id);
   },
-  // コメント（第8回で Supabase に切り替える）
-  addComment: async ({ postId, content, user }) => {
-    mockDb.comments.push({
-      id: `c${nextId++}`,
-      postId,
-      userId: user.uid,
-      userName: user.displayName,
-      userPhotoURL: user.photoURL,
-      content,
-      createdAt: new Date().toISOString(),
-    });
+  // コメントを書く（user_id は DB の default auth.uid() が入る）
+  addComment: async ({ postId, content }) => {
+    const { error } = await supabase.from('comments').insert({ post_id: postId, content });
+    if (error) throw new Error(`コメントに失敗しました：${error.message}`);
     await get().fetchComments(postId);
     await get()._refreshPost(postId);
   },
-  deleteComment: async (comment, myUid) => {
-    mockDb.comments = mockDb.comments.filter((c) => c.id !== comment.id);
+  deleteComment: async (comment) => {
+    const { error } = await supabase.from('comments').delete().eq('id', comment.id);
+    if (error) throw new Error(`コメントの削除に失敗しました：${error.message}`);
     await get().fetchComments(comment.postId);
     await get()._refreshPost(comment.postId);
   },
@@ -165,7 +169,7 @@ const usePostStore = create((set, get) => ({
   _refreshPost: async (postId) => {
     const { data } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
     if (!data) return;
-    const fresh = withMockCounts(toPost(data));
+    const fresh = toPost(data);
     const replace = (list) => list.map((p) => (p.id === postId ? fresh : p));
     set({
       timeline: replace(get().timeline),
