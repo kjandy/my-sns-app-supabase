@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,8 +8,9 @@ import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { PostRow } from '@/components/PostRow';
 import { UserAvatar } from '@/components/UserAvatar';
-import { dummyFollows, dummyPosts, dummyUsers } from '@/lib/dummyData';
+import { dummyFollows, dummyUsers } from '@/lib/dummyData';
 import useAuthStore from '@/stores/authStore';
+import usePostStore from '@/stores/postStore';
 
 /**
  * プロフィールページの中身（components/ProfileClient.jsx）
@@ -17,8 +19,13 @@ import useAuthStore from '@/stores/authStore';
 export const ProfileClient = ({ uid }) => {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { userPosts: posts, fetchUserPosts, deletePost, toggleReaction } = usePostStore();
+
+  useEffect(() => {
+    fetchUserPosts(uid, user?.uid);
+  }, [uid, user?.uid, fetchUserPosts]);
+
   const profile = dummyUsers.find((u) => u.uid === uid);
-  const posts = dummyPosts.filter((p) => p.userId === uid);
   const isMe = uid === user?.uid;
   const followingCount = dummyFollows.filter((f) => f.followerId === uid).length;
   const followerCount = dummyFollows.filter((f) => f.followeeId === uid).length;
@@ -94,7 +101,14 @@ export const ProfileClient = ({ uid }) => {
           <p className="px-4 py-16 text-center text-muted-foreground">まだ投稿がありません</p>
         ) : (
           posts.map((post) => (
-            <PostRow key={post.id} post={post} onClick={() => router.push(`/post/${post.id}`)} />
+            <PostRow
+              key={post.id}
+              post={post}
+              onClick={() => router.push(`/post/${post.id}`)}
+              onDelete={post.userId === user?.uid ? deletePost : undefined}
+              onToggleLike={user ? (p) => toggleReaction(p, 'like', user.uid) : undefined}
+              onToggleBad={user ? (p) => toggleReaction(p, 'bad', user.uid) : undefined}
+            />
           ))
         )}
       </div>
