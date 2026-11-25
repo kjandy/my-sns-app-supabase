@@ -75,7 +75,17 @@ export const ProfileClient = ({ uid }) => {
               fallbackClassName="text-2xl md:text-4xl"
             />
             {isMe ? (
-              <EditProfileDialog profile={profile} onSave={(data) => updateProfile(uid, data)} />
+              <EditProfileDialog
+                profile={profile}
+                onSave={async (data) => {
+                  try {
+                    await updateProfile(uid, data);
+                  } catch (e) {
+                    window.alert(e.message);
+                    throw e;
+                  }
+                }}
+              />
             ) : (
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="icon-lg" aria-label="メッセージを送る" onClick={() => router.push('/messages')}>

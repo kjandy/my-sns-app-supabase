@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import useAuthStore from '@/stores/authStore';
+import useProfileStore from '@/stores/profileStore';
 
 /**
  * 画面上部のヘッダー（components/Header.jsx）
@@ -19,6 +20,8 @@ export default function Header() {
   // ログイン中のユーザーはストアから取り出す（第3回）
   const { user, loading, signOut } = useAuthStore();
   const router = useRouter();
+  // 表示名・アイコンは profiles テーブルの値を優先する（編集するとすぐ反映される）
+  const myProfile = useProfileStore((s) => (user ? s.profiles[user.uid] : null));
 
   const handleSignOut = async () => {
     const result = await signOut();
@@ -58,7 +61,11 @@ export default function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 md:px-8">
         <Link href={`/profile/${user.uid}`} aria-label="自分のプロフィール">
-          <UserAvatar name={user.displayName} photoURL={user.photoURL} className="size-11" />
+          <UserAvatar
+            name={myProfile?.displayName ?? user.displayName}
+            photoURL={myProfile?.photoURL ?? user.photoURL}
+            className="size-11"
+          />
         </Link>
 
         <nav className="flex items-center gap-1">

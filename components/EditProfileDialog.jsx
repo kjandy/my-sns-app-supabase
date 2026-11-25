@@ -47,6 +47,8 @@ export const EditProfileDialog = ({ profile, onSave }) => {
     try {
       await onSave?.({ ...form, displayName: form.displayName.trim() });
       setOpen(false);
+    } catch {
+      // 失敗したらダイアログを閉じずに残す（エラーの表示は呼び出し側で行う）
     } finally {
       setIsSubmitting(false);
     }

@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import Header from '@/components/Header';
 import { MobileNav } from '@/components/MobileNav';
-import { initAuth } from '@/stores/authStore';
+import useAuthStore, { initAuth } from '@/stores/authStore';
+import useProfileStore from '@/stores/profileStore';
 
 /**
  * 全ページ共通の枠（components/ClientLayout.jsx）
@@ -17,6 +18,14 @@ export const ClientLayout = ({ children }) => {
     const unsubscribe = initAuth();
     return () => unsubscribe();
   }, []);
+
+  // ログインしたら、自分のプロフィール（表示名・アイコン）を読み込んでおく
+  //   ★initAuth の中（onAuthStateChange のコールバック）では読まない。ここで読む
+  const uid = useAuthStore((s) => s.user?.uid);
+  const fetchProfile = useProfileStore((s) => s.fetchProfile);
+  useEffect(() => {
+    if (uid) fetchProfile(uid);
+  }, [uid, fetchProfile]);
 
   return (
     <>
