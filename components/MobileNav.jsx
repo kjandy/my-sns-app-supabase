@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Mail, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DUMMY_CURRENT_USER_ID } from '@/lib/dummyData';
+import useAuthStore from '@/stores/authStore';
 
 /**
  * スマホ用の下部ナビゲーション（components/MobileNav.jsx）
@@ -12,7 +12,9 @@ import { DUMMY_CURRENT_USER_ID } from '@/lib/dummyData';
  */
 export const MobileNav = () => {
   const pathname = usePathname();
-  const uid = DUMMY_CURRENT_USER_ID; // 第3回でストアに置き換える
+  const { user } = useAuthStore();
+  if (!user) return null; // 未ログインなら出さない
+  const uid = user.uid;
 
   const items = [
     { href: '/', label: 'ホーム', Icon: Home },

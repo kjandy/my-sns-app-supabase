@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ReactionButtons } from '@/components/ReactionButtons';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn, formatRelativeTime } from '@/lib/utils';
-import { DUMMY_CURRENT_USER_ID } from '@/lib/dummyData';
+import useAuthStore from '@/stores/authStore';
 
 /**
  * 投稿1件分の表示（components/PostRow.jsx）
@@ -20,8 +20,8 @@ import { DUMMY_CURRENT_USER_ID } from '@/lib/dummyData';
  */
 export const PostRow = ({ post, onClick, onDelete, onToggleLike, onToggleBad }) => {
   const router = useRouter();
-  // 第1回は「ログイン中ユーザー」をダミーの固定値にしておく（第3回でストアに置き換える）
-  const isOwnPost = post.userId === DUMMY_CURRENT_USER_ID;
+  const { user } = useAuthStore();
+  const isOwnPost = post.userId === user?.uid;
 
   const goToProfile = (e) => {
     e.stopPropagation();

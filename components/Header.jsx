@@ -6,7 +6,7 @@ import { Home, LogOut, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import { DUMMY_CURRENT_USER_ID, dummyUsers } from '@/lib/dummyData';
+import useAuthStore from '@/stores/authStore';
 
 /**
  * 画面上部のヘッダー（components/Header.jsx）
@@ -16,8 +16,26 @@ import { DUMMY_CURRENT_USER_ID, dummyUsers } from '@/lib/dummyData';
  */
 export default function Header() {
   const pathname = usePathname();
-  // 第1回は固定のダミーユーザー（第3回でストアに置き換える）
-  const user = dummyUsers.find((u) => u.uid === DUMMY_CURRENT_USER_ID);
+  // ログイン中のユーザーはストアから取り出す（第3回）
+  const { user, loading } = useAuthStore();
+
+  // 判定中・未ログインのときは、ロゴ代わりの丸と「ログイン」ボタンだけ出す
+  if (loading || !user) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 md:px-8">
+          <Link href="/" className="flex size-11 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+            S
+          </Link>
+          {!loading && (
+            <Button asChild size="sm">
+              <Link href="/login">ログイン</Link>
+            </Button>
+          )}
+        </div>
+      </header>
+    );
+  }
 
   const navItems = [
     { href: '/', label: 'ホーム', Icon: Home },

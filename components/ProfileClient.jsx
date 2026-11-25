@@ -7,7 +7,8 @@ import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { PostRow } from '@/components/PostRow';
 import { UserAvatar } from '@/components/UserAvatar';
-import { DUMMY_CURRENT_USER_ID, dummyFollows, dummyPosts, dummyUsers } from '@/lib/dummyData';
+import { dummyFollows, dummyPosts, dummyUsers } from '@/lib/dummyData';
+import useAuthStore from '@/stores/authStore';
 
 /**
  * プロフィールページの中身（components/ProfileClient.jsx）
@@ -15,13 +16,14 @@ import { DUMMY_CURRENT_USER_ID, dummyFollows, dummyPosts, dummyUsers } from '@/l
  */
 export const ProfileClient = ({ uid }) => {
   const router = useRouter();
+  const { user } = useAuthStore();
   const profile = dummyUsers.find((u) => u.uid === uid);
   const posts = dummyPosts.filter((p) => p.userId === uid);
-  const isMe = uid === DUMMY_CURRENT_USER_ID;
+  const isMe = uid === user?.uid;
   const followingCount = dummyFollows.filter((f) => f.followerId === uid).length;
   const followerCount = dummyFollows.filter((f) => f.followeeId === uid).length;
   const isFollowing = dummyFollows.some(
-    (f) => f.followerId === DUMMY_CURRENT_USER_ID && f.followeeId === uid,
+    (f) => f.followerId === user?.uid && f.followeeId === uid,
   );
 
   if (!profile) {

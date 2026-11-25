@@ -2,6 +2,7 @@
 
 import Header from '@/components/Header';
 import { MobileNav } from '@/components/MobileNav';
+import { DevUserSwitcher } from '@/components/dev/DevUserSwitcher';
 
 /**
  * 全ページ共通の枠（components/ClientLayout.jsx）
@@ -17,6 +18,8 @@ export const ClientLayout = ({ children }) => {
       {/* pb-16 … スマホでは下部ナビに最後の投稿が隠れないよう余白をとる */}
       <div className="pb-16 md:pb-0">{children}</div>
       <MobileNav />
+      {/* 開発用（第4回で削除する） */}
+      <DevUserSwitcher />
     </>
   );
 };

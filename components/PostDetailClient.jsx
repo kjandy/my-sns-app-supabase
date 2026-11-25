@@ -4,7 +4,8 @@ import { CommentForm } from '@/components/CommentForm';
 import { CommentRow } from '@/components/CommentRow';
 import { PageHeader } from '@/components/PageHeader';
 import { PostRow } from '@/components/PostRow';
-import { DUMMY_CURRENT_USER_ID, dummyComments, dummyPosts, dummyUsers } from '@/lib/dummyData';
+import { dummyComments, dummyPosts } from '@/lib/dummyData';
+import useAuthStore from '@/stores/authStore';
 
 /**
  * 投稿詳細ページの中身（components/PostDetailClient.jsx）
@@ -13,7 +14,7 @@ import { DUMMY_CURRENT_USER_ID, dummyComments, dummyPosts, dummyUsers } from '@/
 export const PostDetailClient = ({ postId }) => {
   const post = dummyPosts.find((p) => p.id === postId);
   const comments = dummyComments.filter((c) => c.postId === postId);
-  const me = dummyUsers.find((u) => u.uid === DUMMY_CURRENT_USER_ID);
+  const { user: me } = useAuthStore();
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl border-x">
