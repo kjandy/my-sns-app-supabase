@@ -20,6 +20,8 @@ export const CommentForm = ({ user, onSubmit }) => {
     try {
       await onSubmit(text);
       setContent('');
+    } catch (error) {
+      window.alert(error.message);
     } finally {
       setIsSubmitting(false);
     }

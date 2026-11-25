@@ -28,9 +28,15 @@ export const PostRow = ({ post, onClick, onDelete, onToggleLike, onToggleBad }) 
     router.push(`/profile/${post.userId}`);
   };
 
-  const handleDelete = (e) => {
+  const handleDelete = async (e) => {
     e.stopPropagation();
-    onDelete?.(post.id);
+    // 消したら元に戻せないので、確認してから実行する
+    if (!window.confirm('この投稿を削除しますか？')) return;
+    try {
+      await onDelete?.(post.id);
+    } catch (error) {
+      window.alert(error.message);
+    }
   };
 
   return (

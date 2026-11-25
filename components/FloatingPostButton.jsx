@@ -35,6 +35,9 @@ export const FloatingPostButton = ({ onSubmit }) => {
       await onSubmit?.(text);
       setContent('');
       setOpen(false);
+    } catch (error) {
+      // 失敗したら入力内容を残したまま知らせる
+      window.alert(error.message);
     } finally {
       setIsSubmitting(false);
     }

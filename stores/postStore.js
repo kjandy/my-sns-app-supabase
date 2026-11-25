@@ -1,114 +1,121 @@
 /**
- * 投稿・リアクション・コメントのストア（stores/postStore.js）— 第3回：モック版
+ * 投稿・リアクション・コメントのストア（stores/postStore.js）
  *
- * 画面はこのストアの関数（fetchTimeline / createPost / toggleReaction …）を呼ぶだけ。
- * 第3回は、ブラウザのメモリ上にある「ニセのデータベース（mockDb）」を読み書きする。
- * 第6〜8回で中身を Supabase に差し替えるが、関数の名前と引数は変えない。
+ * 第6回：投稿（読み込み・作成・削除）を Supabase に切り替えた。
+ *   読むときは timeline_posts ビュー（投稿＋書いた人の名前・アイコン）を使う。
+ * いいね・Bad（第7回）とコメント（第8回）は、まだメモリ上のニセのデータベース。
  *
- * ★ページを再読み込みすると mockDb は最初の状態に戻る（保存先がメモリだから）。
- *   「データベースが必要な理由」を体感するポイント。
+ * ★関数の名前と引数は第3回から変えていない → 画面のコードはほぼそのまま動く。
  */
 import { create } from 'zustand';
-import { dummyComments, dummyPosts } from '@/lib/dummyData';
+import { createClient } from '@/lib/supabase/client';
 
-// ---- ニセのデータベース ----------------------------------------------------
-// dummyPosts の likedByMe / badByMe は「u1 が押している」という意味にしておく
-const mockDb = {
-  posts: dummyPosts.map(({ likedByMe, badByMe, ...p }) => ({
-    ...p,
-    likeCount: p.likeCount - (likedByMe ? 1 : 0), // u1 以外の人の分
-    badCount: p.badCount - (badByMe ? 1 : 0),
-  })),
-  reactions: dummyPosts.flatMap((p) => [
-    ...(p.likedByMe ? [{ postId: p.id, userId: 'u1', kind: 'like' }] : []),
-    ...(p.badByMe ? [{ postId: p.id, userId: 'u1', kind: 'bad' }] : []),
-  ]),
-  comments: [...dummyComments],
-};
+const supabase = createClient();
+
+// ビューの1行（snake_case）→ アプリで使う投稿の形（camelCase）
+const toPost = (row) => ({
+  id: row.id,
+  userId: row.user_id,
+  userName: row.user_name,
+  userPhotoURL: row.user_photo_url,
+  content: row.content,
+  createdAt: row.created_at,
+  likeCount: Number(row.like_count), // bigint は文字列で届くことがあるので数値にそろえる
+  badCount: Number(row.bad_count),
+  commentCount: Number(row.comment_count),
+  likedByMe: row.liked_by_me,
+  badByMe: row.bad_by_me,
+});
+
+// ---- いいね・コメントは第7・8回まで、メモリ上のニセのデータベース --------------
+const mockDb = { reactions: [], comments: [] };
 let nextId = 1000;
-
-// 投稿に「件数」と「自分が押しているか」を付け足す（第6回以降は DB のビューが計算する）
-const withCounts = (post, myUid) => {
+const withMockCounts = (post, myUid) => {
   const rs = mockDb.reactions.filter((r) => r.postId === post.id);
   const mine = (kind) => rs.some((r) => r.userId === myUid && r.kind === kind);
   return {
     ...post,
     likeCount: post.likeCount + rs.filter((r) => r.kind === 'like').length,
     badCount: post.badCount + rs.filter((r) => r.kind === 'bad').length,
-    commentCount: mockDb.comments.filter((c) => c.postId === post.id).length,
-    likedByMe: mine('like'),
-    badByMe: mine('bad'),
+    commentCount: post.commentCount + mockDb.comments.filter((c) => c.postId === post.id).length,
+    likedByMe: post.likedByMe || mine('like'),
+    badByMe: post.badByMe || mine('bad'),
   };
 };
-const byNewest = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
 
 // ---- ストア ---------------------------------------------------------------
 const usePostStore = create((set, get) => ({
   // --- State ---
   timeline: [],
   timelineLoading: false,
-  currentPost: null, // 投稿詳細ページで表示中の投稿
+  currentPost: null, // 投稿詳細ページで表示中の投稿（見つからなければ null）
   userPosts: [], // プロフィールページで表示中の人の投稿
   comments: [], // 投稿詳細ページで表示中のコメント
-  myUid: null, // 「自分が押しているか」の判定に使う
+  myUid: null,
 
   // --- 読み込み ---
   // mode: 'public'（全員）/ 'following'（userIds に含まれる人だけ）
   fetchTimeline: async ({ mode, myUid, userIds = [] }) => {
-    const posts = mockDb.posts
-      .filter((p) => mode === 'public' || userIds.includes(p.userId))
-      .sort(byNewest)
-      .map((p) => withCounts(p, myUid));
-    set({ timeline: posts, timelineLoading: false, myUid });
+    set({ timelineLoading: true });
+    let query = supabase
+      .from('timeline_posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (mode === 'following') query = query.in('user_id', userIds);
+    const { data, error } = await query;
+    if (error) console.error('fetchTimeline', error.message);
+    set({
+      timeline: (data ?? []).map(toPost).map((p) => withMockCounts(p, myUid)),
+      timelineLoading: false,
+      myUid,
+    });
   },
   fetchPost: async (postId, myUid) => {
-    const post = mockDb.posts.find((p) => p.id === postId);
-    set({ currentPost: post ? withCounts(post, myUid) : null, myUid });
+    const { data, error } = await supabase.from('timeline_posts').select('*').eq('id', postId).maybeSingle();
+    if (error) console.error('fetchPost', error.message); // 例：id の形式が不正
+    set({ currentPost: data ? withMockCounts(toPost(data), myUid) : null, myUid });
   },
   fetchUserPosts: async (uid, myUid) => {
-    const posts = mockDb.posts.filter((p) => p.userId === uid).sort(byNewest).map((p) => withCounts(p, myUid));
-    set({ userPosts: posts, myUid });
+    const { data, error } = await supabase
+      .from('timeline_posts')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (error) console.error('fetchUserPosts', error.message);
+    set({ userPosts: (data ?? []).map(toPost).map((p) => withMockCounts(p, myUid)), myUid });
   },
   fetchComments: async (postId) => {
-    const comments = mockDb.comments
-      .filter((c) => c.postId === postId)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    set({ comments });
+    set({ comments: mockDb.comments.filter((c) => c.postId === postId) });
   },
 
   // --- 書き込み ---
-  createPost: async ({ content, user }) => {
-    const post = {
-      id: `p${nextId++}`,
-      userId: user.uid,
-      userName: user.displayName, // ★名前を「コピー」して保存している（第6回で問題になる）
-      userPhotoURL: user.photoURL,
-      content,
-      createdAt: new Date().toISOString(),
-      likeCount: 0,
-      badCount: 0,
-    };
-    mockDb.posts.push(post);
-    set({ timeline: [withCounts(post, user.uid), ...get().timeline] });
+  createPost: async ({ content }) => {
+    // user_id は書かない（DB の default auth.uid() が入る。RLS でも自分以外は拒否される）
+    const { data, error } = await supabase.from('posts').insert({ content }).select('id').single();
+    if (error) throw new Error(`投稿に失敗しました：${error.message}`);
+    // 名前・アイコン付きの形で読み直して、一覧の先頭に足す
+    const { data: row } = await supabase.from('timeline_posts').select('*').eq('id', data.id).single();
+    if (row) set({ timeline: [toPost(row), ...get().timeline] });
   },
   deletePost: async (postId) => {
-    mockDb.posts = mockDb.posts.filter((p) => p.id !== postId);
-    mockDb.comments = mockDb.comments.filter((c) => c.postId !== postId); // コメントも一緒に消す
-    mockDb.reactions = mockDb.reactions.filter((r) => r.postId !== postId);
+    const { error } = await supabase.from('posts').delete().eq('id', postId);
+    if (error) throw new Error(`削除に失敗しました：${error.message}`);
     set({
       timeline: get().timeline.filter((p) => p.id !== postId),
       userPosts: get().userPosts.filter((p) => p.id !== postId),
       currentPost: get().currentPost?.id === postId ? null : get().currentPost,
     });
   },
-  // kind: 'like' | 'bad'。押していなければ追加、押していれば取り消す（トグル）
+  // いいね・Bad（第7回で Supabase に切り替える）
   toggleReaction: async (post, kind, myUid) => {
-    const exists = mockDb.reactions.some((r) => r.postId === post.id && r.userId === myUid && r.kind === kind);
-    mockDb.reactions = exists
-      ? mockDb.reactions.filter((r) => !(r.postId === post.id && r.userId === myUid && r.kind === kind))
+    const mine = (r) => r.postId === post.id && r.userId === myUid && r.kind === kind;
+    mockDb.reactions = mockDb.reactions.some(mine)
+      ? mockDb.reactions.filter((r) => !mine(r))
       : [...mockDb.reactions, { postId: post.id, userId: myUid, kind }];
-    get()._refreshPost(post.id, myUid);
+    get()._refreshPost(post, myUid);
   },
+  // コメント（第8回で Supabase に切り替える）
   addComment: async ({ postId, content, user }) => {
     mockDb.comments.push({
       id: `c${nextId++}`,
@@ -120,24 +127,23 @@ const usePostStore = create((set, get) => ({
       createdAt: new Date().toISOString(),
     });
     await get().fetchComments(postId);
-    get()._refreshPost(postId, user.uid);
+    if (get().currentPost) get()._refreshPost(get().currentPost, user.uid);
   },
   deleteComment: async (comment, myUid) => {
     mockDb.comments = mockDb.comments.filter((c) => c.id !== comment.id);
     await get().fetchComments(comment.postId);
-    get()._refreshPost(comment.postId, myUid);
+    if (get().currentPost) get()._refreshPost(get().currentPost, myUid);
   },
 
-  // 1件の投稿の表示（件数など）を、表示中のすべての一覧で最新にする
-  _refreshPost: (postId, myUid) => {
-    const raw = mockDb.posts.find((p) => p.id === postId);
-    if (!raw) return;
-    const fresh = withCounts(raw, myUid);
-    const replace = (list) => list.map((p) => (p.id === postId ? fresh : p));
+  // 1件の投稿の件数表示を、表示中のすべての一覧で最新にする（ニセのDB用）
+  _refreshPost: (post, myUid) => {
+    const base = { ...post, likeCount: 0, badCount: 0, commentCount: 0, likedByMe: false, badByMe: false };
+    const fresh = withMockCounts(base, myUid);
+    const replace = (list) => list.map((p) => (p.id === post.id ? fresh : p));
     set({
       timeline: replace(get().timeline),
       userPosts: replace(get().userPosts),
-      currentPost: get().currentPost?.id === postId ? fresh : get().currentPost,
+      currentPost: get().currentPost?.id === post.id ? fresh : get().currentPost,
     });
   },
 }));
