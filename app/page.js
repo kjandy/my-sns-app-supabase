@@ -1,14 +1,6 @@
-import { PostRow } from '@/components/PostRow';
-import { dummyPosts } from '@/lib/dummyData';
+import { TopPageClient } from '@/components/TopPageClient';
 
-// トップページ（タイムライン）。
-// 第1回 Step1 では、ダミーデータを並べて表示するだけ。
+// トップページ（タイムライン）。中身は Client Component に任せる。
 export default function TopPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-2xl border-x">
-      {dummyPosts.map((post) => (
-        <PostRow key={post.id} post={post} />
-      ))}
-    </main>
-  );
+  return <TopPageClient />;
 }
